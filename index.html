@@ -45,11 +45,11 @@
                     <h4>🌍 Außenluft</h4>
                     <div class="input-group">
                         <label for="tempAussen">Temperatur (°C)</label>
-                        <input type="number" id="tempAussen" value="-5.0" step="0.1">
+                        <input type="number" id="tempAussen" value="20.0" step="0.1">
                     </div>
                     <div class="input-group">
                         <label for="rhAussen">Relative Feuchte (%)</label>
-                        <input type="number" id="rhAussen" value="80.0" step="0.1" min="0" max="100">
+                        <input type="number" id="rhAussen" value="50.0" step="0.1" min="0" max="100">
                     </div>
                 </div>
 
@@ -57,11 +57,11 @@
                     <h4>💨 Zuluft (Sollwert)</h4>
                     <div class="input-group">
                         <label for="tempZuluft">Temperatur (°C)</label>
-                        <input type="number" id="tempZuluft" value="22.0" step="0.1">
+                        <input type="number" id="tempZuluft" value="20.0" step="0.1">
                     </div>
                     <div class="input-group" id="sollFeuchteWrapper">
                         <label for="rhZuluft">Relative Feuchte (%)</label>
-                        <input type="number" id="rhZuluft" value="50.0" step="0.1" min="0" max="100">
+                        <input type="number" id="rhZuluft" value="60.0" step="0.1" min="0" max="100">
                     </div>
                 </div>
 
@@ -132,8 +132,8 @@
             <div class="summary-grid">
                 <div class="power-summary">
                     <h4>Gesamtleistungen</h4>
-                    <p><span>Gesamtleistung Wärme:</span> <strong id="summary-power-heat">0,00 kW</strong></p>
-                    <p><span>Gesamtleistung Kälte:</span> <strong id="summary-power-cool">0,00 kW</strong></p>
+                    <p><span>Gesamtleistung Wärme:</span> <strong id="summary-power-heat" class="power-heat">0,00 kW</strong></p>
+                    <p><span>Gesamtleistung Kälte:</span> <strong id="summary-power-cool" class="power-cool">0,00 kW</strong></p>
                 </div>
                 <table class="summary-table">
                     <thead>

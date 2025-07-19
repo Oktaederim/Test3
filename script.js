@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     calculate();
 });
 
-// NEU: Standardwerte angepasst
 const defaultValues = {
     tempAussen: 20.0, rhAussen: 50.0,
     tempZuluft: 20.0, rhZuluft: 60.0,
@@ -132,6 +131,7 @@ function calculate() {
         }
         zustand3 = { ...zustand2 };
         if (inputs.tZuluft > zustand2.T + 0.01) {
+            // HIER WAR DER TIPPFEHLER: createZund statt createZustand
             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
             p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
@@ -151,9 +151,11 @@ function updateUI(states, powers) {
     const f = (val, dec) => val.toFixed(dec);
 
     states.forEach((state, i) => {
-        document.getElementById(`res-t-${i}`).textContent = f(state.T, 1);
-        document.getElementById(`res-rh-${i}`).textContent = f(state.rh, 1);
-        document.getElementById(`res-x-${i}`).textContent = f(state.x, 2);
+        if(document.getElementById(`res-t-${i}`)){
+            document.getElementById(`res-t-${i}`).textContent = f(state.T, 1);
+            document.getElementById(`res-rh-${i}`).textContent = f(state.rh, 1);
+            document.getElementById(`res-x-${i}`).textContent = f(state.x, 2);
+        }
     });
     const finalState = states[states.length - 1];
     document.getElementById('res-t-final').textContent = f(finalState.T, 1);
@@ -180,11 +182,9 @@ function updateUI(states, powers) {
         document.getElementById(`summary-${param}-zuluft`).textContent = `${f(finalState[param], dec)} ${unit}`;
     });
 
-    // Wichtig: 'states' wird an die nächste Funktion weitergegeben.
     updateProcessVisuals(states, powers);
 }
 
-// NEU: Die Funktion wurde überarbeitet, um die Farben korrekt zu setzen.
 function updateProcessVisuals(states, powers) {
     const isHeating = powers.p_ve > 0.01 || powers.p_ne > 0.01;
     const isCooling = powers.p_k < -0.01;
@@ -208,7 +208,6 @@ function updateProcessVisuals(states, powers) {
     document.getElementById('comp-k').classList.toggle('inactive', powers.p_k > -0.01);
     document.getElementById('comp-ne').classList.toggle('inactive', powers.p_ne < 0.01);
     
-    // Funktion zum Setzen der Node-Farbe
     const setNodeColor = (nodeId, colorClass) => {
         const node = document.getElementById(nodeId);
         node.classList.remove('color-red', 'color-blue', 'color-green');
@@ -217,21 +216,15 @@ function updateProcessVisuals(states, powers) {
         }
     };
     
-    // Funktion zum Bestimmen der Farbe basierend auf Temperaturänderung
     const getColorFromTempChange = (temp, baseTemp) => {
         if (temp > baseTemp + 0.1) return 'color-red'; // Heizen
         if (temp < baseTemp - 0.1) return 'color-blue'; // Kühlen
         return null; // Keine Änderung
     };
 
-    // Node 0 (Außenluft) ist immer grün
     setNodeColor('node-0', 'color-green');
-
-    // Farben für die Prozessschritte 1, 2 und 3 setzen
     setNodeColor('node-1', getColorFromTempChange(states[1].T, states[0].T));
     setNodeColor('node-2', getColorFromTempChange(states[2].T, states[1].T));
     setNodeColor('node-3', getColorFromTempChange(states[3].T, states[2].T));
-
-    // Die finale Zuluft-Node bekommt die gleiche Farbe wie die letzte Prozess-Node
     setNodeColor('node-final', getColorFromTempChange(states[3].T, states[2].T));
 }

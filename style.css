@@ -101,3 +101,11 @@ h3 { font-size: 1.4rem; margin-top: 1rem; }
 .summary-table td { font-weight: bold; }
 .footer { text-align: center; margin-top: 2rem; color: #888; font-size: 0.9rem; }
 hr { border: none; border-top: 1px solid var(--border-color); margin: 1.5rem 0; }
+
+/* NEU: Farbgebung für die Leistungsanzeige */
+.power-heat {
+    color: var(--danger-color);
+}
+.power-cool {
+    color: var(--primary-color);
+}

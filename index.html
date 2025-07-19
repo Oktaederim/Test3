@@ -21,11 +21,22 @@
                 <button id="resetBtn" title="Alle Werte auf Standard zurücksetzen">⟲ Reset</button>
             </div>
             <div class="main-config-section">
-                <h4>Betriebsmodus</h4>
-                <div class="radio-group">
-                    <label><input type="radio" name="betriebsmodus" value="heizen">Nur Heizen</label>
-                    <label><input type="radio" name="betriebsmodus" value="kuehlen_sensibel">Kühlen (sensibel)</label>
-                    <label><input type="radio" name="betriebsmodus" value="entfeuchten" checked>Kühlen & Entfeuchten</label>
+                <div class="grid-container" style="gap: 1rem 2rem;">
+                    <div>
+                        <h4>Betriebsmodus</h4>
+                        <div class="radio-group">
+                            <label><input type="radio" name="betriebsmodus" value="heizen">Nur Heizen</label>
+                            <label><input type="radio" name="betriebsmodus" value="kuehlen_sensibel">Kühlen (sensibel)</label>
+                            <label><input type="radio" name="betriebsmodus" value="entfeuchten" checked>Kühlen & Entfeuchten</label>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Heizkonzept</h4>
+                        <div class="radio-group">
+                            <label><input type="radio" name="heizkonzept" value="standard" checked>Standard (NE Haupterhitzer)</label>
+                            <label><input type="radio" name="heizkonzept" value="ve_hauptleistung">VE als Haupterhitzer</label>
+                        </div>
+                    </div>
                 </div>
             </div>
             <hr>
@@ -64,8 +75,8 @@
                         <label for="druck">Luftdruck (hPa)</label>
                         <input type="number" id="druck" value="1013.25" step="0.1">
                     </div>
-                    <div class="input-group">
-                        <label for="tempVEZiel">Vorerhitzer Ziel-Temperatur (°C)</label>
+                    <div class="input-group" id="veZielTempWrapper">
+                        <label for="tempVEZiel">VE Ziel-Temperatur (°C)</label>
                         <input type="number" id="tempVEZiel" value="5.0" step="0.1">
                     </div>
                 </div>

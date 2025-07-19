@@ -7,13 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
     calculate();
 });
 
+// NEU: Standardwerte angepasst
 const defaultValues = {
-    tempAussen: -5.0, rhAussen: 80.0,
-    tempZuluft: 22.0, rhZuluft: 50.0,
+    tempAussen: 20.0, rhAussen: 50.0,
+    tempZuluft: 20.0, rhZuluft: 60.0,
     volumenstrom: 5000, druck: 1013.25,
     tempVEZiel: 5.0,
     betriebsmodus: 'entfeuchten',
-    heizkonzept: 'standard' // NEU
+    heizkonzept: 'standard'
 };
 
 function resetAll() {
@@ -31,18 +32,16 @@ function resetAll() {
 
 function toggleUI() {
     const betriebsmodus = document.querySelector('input[name="betriebsmodus"]:checked').value;
-    const heizkonzept = document.querySelector('input[name="heizkonzept"]:checked').value; // NEU
+    const heizkonzept = document.querySelector('input[name="heizkonzept"]:checked').value;
     
     document.getElementById('sollFeuchteWrapper').style.display = (betriebsmodus === 'entfeuchten') ? 'block' : 'none';
     document.getElementById('kuehlwasserWrapper').style.display = (betriebsmodus === 'heizen') ? 'none' : 'block';
     
-    // NEU: Die VE Ziel-Temperatur ist nur im Standard-Konzept relevant
     const veZielTempWrapper = document.getElementById('veZielTempWrapper');
     veZielTempWrapper.style.display = (heizkonzept === 'standard') ? 'block' : 'none';
     veZielTempWrapper.querySelector('label').textContent = (heizkonzept === 'standard') ? 'VE Frostschutz-Zieltemp. (°C)' : 'VE Ziel-Temperatur (°C)';
 }
 
-// --- Psychrometrische Hilfsfunktionen (unverändert) ---
 const getSVP = (T) => 6.112 * Math.exp((17.62 * T) / (243.12 + T));
 const getAbsFeuchte = (T, rh, p) => 622 * (rh / 100 * getSVP(T)) / (p - (rh / 100 * getSVP(T)));
 const getRelFeuchte = (T, x, p) => {
@@ -75,7 +74,7 @@ const createZustand = (T, rh, x_val, p) => {
 function calculate() {
     const inputs = {
         betriebsmodus: document.querySelector('input[name="betriebsmodus"]:checked').value,
-        heizkonzept: document.querySelector('input[name="heizkonzept"]:checked').value, // NEU
+        heizkonzept: document.querySelector('input[name="heizkonzept"]:checked').value,
         tAussen: parseFloat(document.getElementById('tempAussen').value),
         rhAussen: parseFloat(document.getElementById('rhAussen').value),
         tZuluft: parseFloat(document.getElementById('tempZuluft').value),
@@ -95,17 +94,11 @@ function calculate() {
     const zustand0 = createZustand(inputs.tAussen, inputs.rhAussen, null, inputs.druck);
     let zustand1 = { ...zustand0 }, zustand2 = {}, zustand3 = {};
     
-    // ########## NEUE LOGIK BASIEREND AUF HEIZKONZEPT ##########
     if (inputs.heizkonzept === 've_hauptleistung') {
-        // ### LOGIK FÜR "VE ALS HAUPTERHITZER" (IHR SZENARIO) ###
-        
-        // 1. VE: Ist der Haupterhitzer. Läuft immer, wenn Heizen nötig ist.
         if (inputs.tZuluft > zustand0.T + 0.01) {
             zustand1 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
             p_ve = massenstrom * (zustand1.h - zustand0.h);
         }
-        
-        // 2. Kühler: Kühlt von Zustand 1 (also von der ZULUFT-Temperatur!) herunter, falls Entfeuchtung nötig ist.
         zustand2 = { ...zustand1 };
         if (inputs.betriebsmodus === 'entfeuchten') {
             const x_soll_zuluft = getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck);
@@ -116,24 +109,16 @@ function calculate() {
                 kondensat = massenstrom * (zustand1.x - zustand2.x) * 3.6;
             }
         }
-        
-        // 3. NE: Ist der Nacherhitzer. Läuft NUR, wenn zuvor entfeuchtet (gekühlt) wurde.
         zustand3 = { ...zustand2 };
         if (inputs.tZuluft > zustand2.T + 0.01) {
             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
             p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
-
     } else {
-        // ### LOGIK FÜR "STANDARD (NE HAUPTERHITZER)" ###
-
-        // 1. VE: Dient primär dem Frostschutz.
         if (zustand0.T < inputs.tVEZiel - 0.01) {
              zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
              p_ve = massenstrom * (zustand1.h - zustand0.h);
         }
-        
-        // 2. Kühler: Kühlt/Entfeuchtet bei Bedarf von Zustand 1 aus.
         zustand2 = { ...zustand1 };
         if (inputs.betriebsmodus !== 'heizen' && inputs.tZuluft < zustand1.T - 0.01) {
              const x_soll_zuluft = (inputs.betriebsmodus === 'entfeuchten') ? getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck) : zustand1.x;
@@ -145,26 +130,23 @@ function calculate() {
                 kondensat = massenstrom * (zustand1.x - zustand2.x) * 3.6;
              }
         }
-        
-        // 3. NE: Ist der Haupterhitzer, erwärmt auf die finale Zuluft-Temperatur.
         zustand3 = { ...zustand2 };
         if (inputs.tZuluft > zustand2.T + 0.01) {
-            zustand3 = createZund(inputs.tZuluft, null, zustand2.x, inputs.druck);
+            zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
             p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
     }
+
+    const allStates = [zustand0, zustand1, zustand2, zustand3];
 
     const cp_wasser = 4.187, rho_wasser = 1000;
     const wv_ve = (p_ve > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ve * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
     const wv_ne = (p_ne > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ne * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
     const wv_k = (p_k < 0 && inputs.tKuehlR > inputs.tKuehlV) ? (Math.abs(p_k) * 3600) / (cp_wasser * (inputs.tKuehlR - inputs.tKuehlV) * rho_wasser) : 0;
 
-    updateUI([zustand0, zustand1, zustand2, zustand3], { p_ve, p_k, p_ne, kondensat, wv_ve, wv_k, wv_ne });
+    updateUI(allStates, { p_ve, p_k, p_ne, kondensat, wv_ve, wv_k, wv_ne });
 }
 
-// Die Funktionen updateUI und updateProcessVisuals bleiben größtenteils gleich,
-// daher werden sie hier zur Übersichtlichkeit nicht erneut vollständig aufgeführt.
-// Die Logik in diesen Funktionen zur Darstellung der berechneten Werte ist universell.
 function updateUI(states, powers) {
     const f = (val, dec) => val.toFixed(dec);
 
@@ -198,10 +180,12 @@ function updateUI(states, powers) {
         document.getElementById(`summary-${param}-zuluft`).textContent = `${f(finalState[param], dec)} ${unit}`;
     });
 
-    updateProcessVisuals(powers);
+    // Wichtig: 'states' wird an die nächste Funktion weitergegeben.
+    updateProcessVisuals(states, powers);
 }
 
-function updateProcessVisuals(powers) {
+// NEU: Die Funktion wurde überarbeitet, um die Farben korrekt zu setzen.
+function updateProcessVisuals(states, powers) {
     const isHeating = powers.p_ve > 0.01 || powers.p_ne > 0.01;
     const isCooling = powers.p_k < -0.01;
     const isDehumidifying = powers.kondensat > 0.01;
@@ -224,20 +208,30 @@ function updateProcessVisuals(powers) {
     document.getElementById('comp-k').classList.toggle('inactive', powers.p_k > -0.01);
     document.getElementById('comp-ne').classList.toggle('inactive', powers.p_ne < 0.01);
     
-    const setNodeColor = (nodeId, temp, baseTemp) => {
+    // Funktion zum Setzen der Node-Farbe
+    const setNodeColor = (nodeId, colorClass) => {
         const node = document.getElementById(nodeId);
-        node.classList.remove('color-red', 'color-blue');
-        if (temp > baseTemp + 0.1) node.classList.add('color-red');
-        else if (temp < baseTemp - 0.1) node.classList.add('color-blue');
+        node.classList.remove('color-red', 'color-blue', 'color-green');
+        if (colorClass) {
+            node.classList.add(colorClass);
+        }
     };
     
-    const nodeIds = [ 'node-0', 'node-1', 'node-2', 'node-3' ];
-    for(let i = 1; i < nodeIds.length; i++) {
-        const temp = parseFloat(document.getElementById(`res-t-${i}`).textContent);
-        const prevTemp = parseFloat(document.getElementById(`res-t-${i-1}`).textContent);
-        setNodeColor(nodeIds[i], temp, prevTemp);
-    }
-     const finalTemp = parseFloat(document.getElementById('res-t-final').textContent);
-     const prevTemp = parseFloat(document.getElementById('res-t-3').textContent);
-     setNodeColor('node-final', finalTemp, prevTemp);
+    // Funktion zum Bestimmen der Farbe basierend auf Temperaturänderung
+    const getColorFromTempChange = (temp, baseTemp) => {
+        if (temp > baseTemp + 0.1) return 'color-red'; // Heizen
+        if (temp < baseTemp - 0.1) return 'color-blue'; // Kühlen
+        return null; // Keine Änderung
+    };
+
+    // Node 0 (Außenluft) ist immer grün
+    setNodeColor('node-0', 'color-green');
+
+    // Farben für die Prozessschritte 1, 2 und 3 setzen
+    setNodeColor('node-1', getColorFromTempChange(states[1].T, states[0].T));
+    setNodeColor('node-2', getColorFromTempChange(states[2].T, states[1].T));
+    setNodeColor('node-3', getColorFromTempChange(states[3].T, states[2].T));
+
+    // Die finale Zuluft-Node bekommt die gleiche Farbe wie die letzte Prozess-Node
+    setNodeColor('node-final', getColorFromTempChange(states[3].T, states[2].T));
 }

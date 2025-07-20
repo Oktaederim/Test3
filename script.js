@@ -103,7 +103,7 @@ function calculate() {
         if (inputs.betriebsmodus === 'entfeuchten') {
             const x_soll_zuluft = getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck);
             if (zustand1.x > x_soll_zuluft + 0.1) {
-                const t_kuehl_ziel = getTaupunkt(inputs.tZuluft, getRelFeuchte(inputs.tZuluft, x_soll_zuluft, inputs.druck));
+                const t_kuehl_ziel = getTaupunkt(inputs.tZuluft, inputs.rhZuluft);
                 zustand2 = createZustand(t_kuehl_ziel, 100, x_soll_zuluft, inputs.druck);
                 p_k = massenstrom * (zustand2.h - zustand1.h);
                 kondensat = massenstrom * (zustand1.x - zustand2.x) * 3.6;
@@ -114,18 +114,18 @@ function calculate() {
             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
             p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
-    } else {
+    } else { // Standard-Konzept
         zustand1 = { ...zustand0 };
         if (zustand0.T < inputs.tVEZiel - 0.01) {
              zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
              p_ve = massenstrom * (zustand1.h - zustand0.h);
         }
         
-        // KORREKTUR: Zustand vom VE an Kühler weitergeben
         zustand2 = { ...zustand1 };
         if (inputs.betriebsmodus !== 'heizen' && inputs.tZuluft < zustand1.T - 0.01) {
              const x_soll_zuluft = (inputs.betriebsmodus === 'entfeuchten') ? getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck) : zustand1.x;
-             const t_kuehl_ziel = (inputs.betriebsmodus === 'entfeuchten') ? getTaupunkt(zustand1.T, getRelFeuchte(zustand1.T, x_soll_zuluft, inputs.druck)) : inputs.tZuluft;
+             // KORREKTUR: Die Ziel-Kühltemperatur (Taupunkt) wird direkt aus den Zuluft-Sollwerten berechnet.
+             const t_kuehl_ziel = (inputs.betriebsmodus === 'entfeuchten') ? getTaupunkt(inputs.tZuluft, inputs.rhZuluft) : inputs.tZuluft;
              
              if(zustand1.T > t_kuehl_ziel + 0.01) {
                 zustand2 = createZustand(t_kuehl_ziel, 100, x_soll_zuluft, inputs.druck);
@@ -134,7 +134,6 @@ function calculate() {
              }
         }
         
-        // KORREKTUR: Zustand vom Kühler an NE weitergeben
         zustand3 = { ...zustand2 };
         if (inputs.tZuluft > zustand2.T + 0.01) {
             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
@@ -198,9 +197,9 @@ function updateProcessVisuals(states, powers) {
     let processText = "Keine Luftbehandlung notwendig.";
     if (isHeating && !isCooling) processText = "Reiner Heizprozess.";
     if (!isHeating && isCooling && !isDehumidifying) processText = "Sensibler Kühlprozess.";
-    if (isCooling && isDehumidifying && !isHeating) processText = "Reiner Entfeuchtungsprozess.";
+    if (isCooling && isDehumidifying && powers.p_ne <= 0.01) processText = "Reiner Entfeuchtungsprozess.";
     if (isCooling && isDehumidifying && powers.p_ne > 0.01) processText = "Kühlen mit Entfeuchtung und Nacherwärmung.";
-    if (powers.p_ve > 0.01 && isCooling) processText = "Vorwärmung mit anschließendem Kühlprozess.";
+    if (powers.p_ve > 0.01 && isCooling) processText = "Frostschutz mit anschließendem Kühlprozess.";
     
     const overview = document.createElement('div');
     overview.className = 'process-overview process-info';

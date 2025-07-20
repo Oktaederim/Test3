@@ -124,7 +124,6 @@ function calculate() {
         zustand2 = { ...zustand1 };
         if (inputs.betriebsmodus !== 'heizen' && inputs.tZuluft < zustand1.T - 0.01) {
              const x_soll_zuluft = (inputs.betriebsmodus === 'entfeuchten') ? getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck) : zustand1.x;
-             // KORREKTUR: Die Ziel-Kühltemperatur (Taupunkt) wird direkt aus den Zuluft-Sollwerten berechnet.
              const t_kuehl_ziel = (inputs.betriebsmodus === 'entfeuchten') ? getTaupunkt(inputs.tZuluft, inputs.rhZuluft) : inputs.tZuluft;
              
              if(zustand1.T > t_kuehl_ziel + 0.01) {
@@ -179,11 +178,15 @@ function updateUI(states, powers) {
     document.getElementById('summary-power-heat').textContent = `${f(totalHeat, 2)} kW`;
     document.getElementById('summary-power-cool').textContent = `${f(totalCool, 2)} kW`;
     
-    ['t', 'rh', 'x', 'h', 'td'].forEach(param => {
-        const unit = {'t':'°C', 'rh':'%', 'x':'g/kg', 'h':'kJ/kg', 'td':'°C'}[param];
-        const dec = (param === 't' || param === 'rh' || param === 'td') ? 1 : 2;
-        document.getElementById(`summary-${param}-aussen`).textContent = `${f(states[0][param], dec)} ${unit}`;
-        document.getElementById(`summary-${param}-zuluft`).textContent = `${f(finalState[param], dec)} ${unit}`;
+    // KORREKTUR: Die Schlüssel für die Zustandsobjekte müssen großgeschrieben sein (T, not t)
+    const paramMapping = { t: 'T', rh: 'rh', x: 'x', h: 'h', td: 'td' };
+    Object.keys(paramMapping).forEach(paramKey => {
+        const stateKey = paramMapping[paramKey];
+        const unit = {'t':'°C', 'rh':'%', 'x':'g/kg', 'h':'kJ/kg', 'td':'°C'}[paramKey];
+        const dec = (paramKey === 't' || paramKey === 'rh' || paramKey === 'td') ? 1 : 2;
+        
+        document.getElementById(`summary-${paramKey}-aussen`).textContent = `${f(states[0][stateKey], dec)} ${unit}`;
+        document.getElementById(`summary-${paramKey}-zuluft`).textContent = `${f(finalState[stateKey], dec)} ${unit}`;
     });
 
     updateProcessVisuals(states, powers);
@@ -221,9 +224,9 @@ function updateProcessVisuals(states, powers) {
     };
     
     const getColorFromTempChange = (temp, baseTemp) => {
-        if (temp > baseTemp + 0.1) return 'color-red'; // Heizen
-        if (temp < baseTemp - 0.1) return 'color-blue'; // Kühlen
-        return null; // Keine Änderung
+        if (temp > baseTemp + 0.1) return 'color-red';
+        if (temp < baseTemp - 0.1) return 'color-blue';
+        return null;
     };
 
     setNodeColor('node-0', 'color-green');

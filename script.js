@@ -91,9 +91,10 @@ function calculate() {
     let p_ve = 0, p_k = 0, p_ne = 0, kondensat = 0;
 
     const zustand0 = createZustand(inputs.tAussen, inputs.rhAussen, null, inputs.druck);
-    let zustand1 = { ...zustand0 }, zustand2 = {}, zustand3 = {};
+    let zustand1, zustand2, zustand3;
     
     if (inputs.heizkonzept === 've_hauptleistung') {
+        zustand1 = { ...zustand0 };
         if (inputs.tZuluft > zustand0.T + 0.01) {
             zustand1 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
             p_ve = massenstrom * (zustand1.h - zustand0.h);
@@ -114,10 +115,13 @@ function calculate() {
             p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
     } else {
+        zustand1 = { ...zustand0 };
         if (zustand0.T < inputs.tVEZiel - 0.01) {
              zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
              p_ve = massenstrom * (zustand1.h - zustand0.h);
         }
+        
+        // KORREKTUR: Zustand vom VE an Kühler weitergeben
         zustand2 = { ...zustand1 };
         if (inputs.betriebsmodus !== 'heizen' && inputs.tZuluft < zustand1.T - 0.01) {
              const x_soll_zuluft = (inputs.betriebsmodus === 'entfeuchten') ? getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck) : zustand1.x;
@@ -129,9 +133,10 @@ function calculate() {
                 kondensat = massenstrom * (zustand1.x - zustand2.x) * 3.6;
              }
         }
+        
+        // KORREKTUR: Zustand vom Kühler an NE weitergeben
         zustand3 = { ...zustand2 };
         if (inputs.tZuluft > zustand2.T + 0.01) {
-            // HIER WAR DER TIPPFEHLER: createZund statt createZustand
             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
             p_ne = massenstrom * (zustand3.h - zustand2.h);
         }

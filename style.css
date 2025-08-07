@@ -127,4 +127,14 @@ hr { border: none; border-top: 1px solid var(--border-color); margin: 1.5rem 0; 
 }
 .info-box .info-content p, .info-box .info-content ul {
     margin-bottom: 1rem;
+    line-height: 1.7;
+}
+.calculated-rh-display {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: var(--label-color);
 }

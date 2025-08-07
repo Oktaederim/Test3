@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RLT-Rechner (Analyse-Version)</title>
+    <title>RLT-Rechner (Profi-Version)</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>🌬️ RLT-Rechner (Analyse-Version)</h1>
+        <h1>🌬️ RLT-Rechner (Profi-Version)</h1>
         <p class="subtitle">Analyse von Anlagenprozessen und Luftzuständen</p>
     </header>
 
@@ -56,12 +56,27 @@
                 <div>
                     <h4>💨 Zuluft (Sollwert)</h4>
                     <div class="input-group">
+                        <label>Regelungsart</label>
+                        <div class="radio-group" style="padding: 0.5rem; background: #f0f2f5; border-radius: 6px;">
+                            <label><input type="radio" name="regelungsart" value="trh" checked>Temp. & r.F.-geführt</label>
+                            <label><input type="radio" name="regelungsart" value="x">abs. Feuchte-geführt</label>
+                        </div>
+                    </div>
+                    <div class="input-group">
                         <label for="tempZuluft">Temperatur (°C)</label>
                         <input type="number" id="tempZuluft" value="20.0" step="0.1">
                     </div>
-                    <div class="input-group" id="sollFeuchteWrapper">
-                        <label for="rhZuluft">Relative Feuchte (%)</label>
-                        <input type="number" id="rhZuluft" value="60.0" step="0.1" min="0" max="100">
+                    <div id="zuluft-trh-wrapper">
+                        <div class="input-group">
+                            <label for="rhZuluft">Relative Feuchte (%)</label>
+                            <input type="number" id="rhZuluft" value="60.0" step="0.1" min="0" max="100">
+                        </div>
+                    </div>
+                    <div id="zuluft-x-wrapper" style="display: none;">
+                         <div class="input-group">
+                            <label for="xZuluft">Absolute Feuchte (g/kg)</label>
+                            <input type="number" id="xZuluft" value="7.0" step="0.1" min="0">
+                        </div>
                     </div>
                 </div>
 
@@ -189,7 +204,7 @@
         </details>
 
     </main>
-    <footer class="footer"><p>RLT-Rechner (Analyse-Version) | Erstellt mit Gemini</p></footer>
+    <footer class="footer"><p>RLT-Rechner (Profi-Version) | Erstellt mit Gemini</p></footer>
 </div>
 <script src="script.js"></script>
 </body>

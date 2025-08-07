@@ -1,8 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const inputs = document.querySelectorAll('input[type="number"], input[type="radio"]');
-    inputs.forEach(input => input.addEventListener('input', calculate));
+    // KORREKTUR: Robuste Ereignisbehandlung, die bei JEDER Änderung die UI und die Berechnung aktualisiert.
+    const allInputs = document.querySelectorAll('input[type="number"], input[type="radio"]');
+    allInputs.forEach(input => {
+        const eventType = (input.type === 'radio') ? 'change' : 'input';
+        input.addEventListener(eventType, () => {
+            if (input.type === 'radio') {
+                toggleUI(); // UI-Umschaltung nur bei Radio-Button-Änderung
+            }
+            calculate(); // Berechnung bei JEDER Änderung
+        });
+    });
+
     document.getElementById('resetBtn').addEventListener('click', resetAll);
-    document.querySelectorAll('input[name="betriebsmodus"], input[name="heizkonzept"], input[name="regelungsart"]').forEach(radio => radio.addEventListener('change', toggleUI));
+    
+    // Initialer Zustand
     toggleUI();
     calculate();
 });
@@ -31,22 +42,20 @@ function resetAll() {
 }
 
 function toggleUI() {
-    const betriebsmodus = document.querySelector('input[name="betriebsmodus"]:checked').value;
     const heizkonzept = document.querySelector('input[name="heizkonzept"]:checked').value;
     const regelungsart = document.querySelector('input[name="regelungsart"]:checked').value;
     
-    document.getElementById('kuehlwasserWrapper').style.display = (betriebsmodus === 'heizen') ? 'none' : 'block';
+    document.getElementById('kuehlwasserWrapper').style.display = (document.querySelector('input[name="betriebsmodus"]:checked').value === 'heizen') ? 'none' : 'block';
     
     const veZielTempWrapper = document.getElementById('veZielTempWrapper');
     veZielTempWrapper.style.display = (heizkonzept === 'standard') ? 'block' : 'none';
     veZielTempWrapper.querySelector('label').textContent = (heizkonzept === 'standard') ? 'VE Frostschutz-Zieltemp. (°C)' : 'VE Ziel-Temperatur (°C)';
 
-    // UI für Regelungsart steuern
     document.getElementById('zuluft-trh-wrapper').style.display = (regelungsart === 'trh') ? 'block' : 'none';
     document.getElementById('zuluft-x-wrapper').style.display = (regelungsart === 'x') ? 'block' : 'none';
 }
 
-// --- Psychrometrische Hilfsfunktionen ---
+// --- Psychrometrische Hilfsfunktionen (unverändert) ---
 const getSVP = (T) => 6.112 * Math.exp((17.62 * T) / (243.12 + T));
 const getAbsFeuchte = (T, rh, p) => 622 * (rh / 100 * getSVP(T)) / (p - (rh / 100 * getSVP(T)));
 const getRelFeuchte = (T, x, p) => {
@@ -81,7 +90,6 @@ const createZustand = (T, rh, x_val, p) => {
 // ################ FINALE BERECHNUNGSLOGIK ######################
 // ###############################################################
 function calculate() {
-    // 1. Inputs einlesen
     const inputs = {
         betriebsmodus: document.querySelector('input[name="betriebsmodus"]:checked').value,
         heizkonzept: document.querySelector('input[name="heizkonzept"]:checked').value,
@@ -103,19 +111,17 @@ function calculate() {
     const massenstrom = (inputs.volumenstrom * 1.2) / 3600;
     let p_ve = 0, p_k = 0, p_ne = 0, kondensat = 0, t_kuehl_ziel = 0;
 
-    // 2. Grundzustände und Sollwerte basierend auf Regelungsart bestimmen
     const zustand0 = createZustand(inputs.tAussen, inputs.rhAussen, null, inputs.druck);
 
     let x_soll_zuluft, rh_soll_zuluft;
     if (inputs.regelungsart === 'trh') {
         x_soll_zuluft = getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck);
         rh_soll_zuluft = inputs.rhZuluft;
-    } else { // 'x'
+    } else {
         x_soll_zuluft = inputs.xZuluft;
         rh_soll_zuluft = getRelFeuchte(inputs.tZuluft, x_soll_zuluft, inputs.druck);
     }
     
-    // 3. Prozesspfad basierend auf intelligenter Logik bestimmen
     const rh_nach_nur_heizen = getRelFeuchte(inputs.tZuluft, zustand0.x, inputs.druck);
     const mussEntfeuchtetWerden = (inputs.betriebsmodus === 'entfeuchten') && (rh_nach_nur_heizen > rh_soll_zuluft + 0.5);
     const mussSensibelGekuehltWerden = (inputs.betriebsmodus === 'kuehlen_sensibel') && (zustand0.T > inputs.tZuluft + 0.01);
@@ -124,7 +130,6 @@ function calculate() {
     let zustand1 = { ...zustand0 }, zustand2 = { ...zustand0 }, zustand3 = { ...zustand0 };
 
     if (mussEntfeuchtetWerden) {
-        // --- PFAD A: ENTFEUCHTUNG (Kühlen + Nacherwärmen) ---
         if (zustand0.T < inputs.tVEZiel - 0.01 && inputs.heizkonzept === 'standard') {
             zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
             p_ve = massenstrom * (zustand1.h - zustand0.h);
@@ -140,13 +145,11 @@ function calculate() {
              p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
     } else if (mussSensibelGekuehltWerden) {
-        // --- PFAD B: SENSIBLES KÜHLEN ---
         zustand2 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
         p_k = massenstrom * (zustand2.h - zustand0.h);
         zustand1 = { ...zustand0 };
         zustand3 = { ...zustand2 };
     } else if (mussGeheiztWerden) {
-        // --- PFAD C: HEIZEN ---
         if (inputs.heizkonzept === 'standard') {
             if (zustand0.T < inputs.tVEZiel - 0.01) {
                 zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
@@ -155,14 +158,13 @@ function calculate() {
             zustand2 = { ...zustand1 };
             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
             p_ne = massenstrom * (zustand3.h - zustand2.h);
-        } else { // ve_hauptleistung
+        } else {
             zustand1 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
             p_ve = massenstrom * (zustand1.h - zustand0.h);
             zustand2 = { ...zustand1 };
             zustand3 = { ...zustand1 };
         }
     } else {
-        // --- PFAD D: KEINE BEHANDLUNG ---
         zustand1 = zustand2 = zustand3 = { ...zustand0 };
     }
     

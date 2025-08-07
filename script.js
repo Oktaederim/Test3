@@ -1,19 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // KORREKTUR: Robuste Ereignisbehandlung, die bei JEDER Änderung die UI und die Berechnung aktualisiert.
     const allInputs = document.querySelectorAll('input[type="number"], input[type="radio"]');
     allInputs.forEach(input => {
         const eventType = (input.type === 'radio') ? 'change' : 'input';
         input.addEventListener(eventType, () => {
             if (input.type === 'radio') {
-                toggleUI(); // UI-Umschaltung nur bei Radio-Button-Änderung
+                toggleUI();
             }
-            calculate(); // Berechnung bei JEDER Änderung
+            calculate();
         });
     });
 
     document.getElementById('resetBtn').addEventListener('click', resetAll);
     
-    // Initialer Zustand
     toggleUI();
     calculate();
 });
@@ -55,7 +53,7 @@ function toggleUI() {
     document.getElementById('zuluft-x-wrapper').style.display = (regelungsart === 'x') ? 'block' : 'none';
 }
 
-// --- Psychrometrische Hilfsfunktionen (unverändert) ---
+// --- Psychrometrische Hilfsfunktionen ---
 const getSVP = (T) => 6.112 * Math.exp((17.62 * T) / (243.12 + T));
 const getAbsFeuchte = (T, rh, p) => 622 * (rh / 100 * getSVP(T)) / (p - (rh / 100 * getSVP(T)));
 const getRelFeuchte = (T, x, p) => {
@@ -71,6 +69,17 @@ const getTaupunkt = (T, rh) => {
     const alpha = Math.log(rh / 100) + (a * T) / (b + T);
     return (b * alpha) / (a - alpha);
 };
+// NEU: Genaue Berechnung der feuchten Dichte
+const getDichte = (T, rh, p) => {
+    const p_Pa = p * 100; // hPa -> Pa
+    const T_K = T + 273.15; // °C -> K
+    const R_d = 287.058; // Gaskonstante trockene Luft
+    const R_v = 461.52;  // Gaskonstante Wasserdampf
+    const p_v = (rh / 100) * getSVP(T) * 100; // Dampfdruck in Pa
+    const p_d = p_Pa - p_v; // Partialdruck trockene Luft
+    return (p_d / (R_d * T_K)) + (p_v / (R_v * T_K)); // Dichte in kg/m³
+};
+
 const createZustand = (T, rh, x_val, p) => {
     const zustand = { T, p };
     if (x_val !== null) {
@@ -82,13 +91,13 @@ const createZustand = (T, rh, x_val, p) => {
     }
     zustand.h = getEnthalpie(zustand.T, zustand.x);
     zustand.td = getTaupunkt(zustand.T, zustand.rh);
+    // NEU: Berechnung und Speicherung von x in g/m³
+    const dichte = getDichte(zustand.T, zustand.rh, p);
+    zustand.x_gm3 = zustand.x * dichte;
     return zustand;
 };
 
 
-// ###############################################################
-// ################ FINALE BERECHNUNGSLOGIK ######################
-// ###############################################################
 function calculate() {
     const inputs = {
         betriebsmodus: document.querySelector('input[name="betriebsmodus"]:checked').value,
@@ -120,6 +129,8 @@ function calculate() {
     } else {
         x_soll_zuluft = inputs.xZuluft;
         rh_soll_zuluft = getRelFeuchte(inputs.tZuluft, x_soll_zuluft, inputs.druck);
+        // NEU: Dynamische Anzeige der r.F. aktualisieren
+        document.getElementById('rh-ergebnis').textContent = rh_soll_zuluft.toFixed(1);
     }
     
     const rh_nach_nur_heizen = getRelFeuchte(inputs.tZuluft, zustand0.x, inputs.druck);
@@ -206,10 +217,11 @@ function updateUI(states, powers, inputs) {
     document.getElementById('summary-power-heat').textContent = `${f(totalHeat, 2)} kW`;
     document.getElementById('summary-power-cool').textContent = `${f(totalCool, 2)} kW`;
     
-    const paramMapping = { t: 'T', rh: 'rh', x: 'x', h: 'h', td: 'td' };
+    // NEU: paramMapping erweitert und Schleife angepasst
+    const paramMapping = { t: 'T', rh: 'rh', x: 'x', x_gm3: 'x_gm3', h: 'h', td: 'td' };
     Object.keys(paramMapping).forEach(paramKey => {
         const stateKey = paramMapping[paramKey];
-        const unit = {'t':'°C', 'rh':'%', 'x':'g/kg', 'h':'kJ/kg', 'td':'°C'}[paramKey];
+        const unit = {'t':'°C', 'rh':'%', 'x':'g/kg', 'x_gm3':'g/m³', 'h':'kJ/kg', 'td':'°C'}[paramKey];
         const dec = (paramKey === 't' || paramKey === 'rh' || paramKey === 'td') ? 1 : 2;
         
         document.getElementById(`summary-${paramKey}-aussen`).textContent = `${f(states[0][stateKey], dec)} ${unit}`;
@@ -235,7 +247,7 @@ function updateProcessVisuals(states, powers, inputs) {
     if (isCooling && isDehumidifying && powers.t_kuehl_ziel < inputs.tKuehlV) {
         warningText += `<br><strong>Achtung:</strong> Kühlwasser-VL (${inputs.tKuehlV}°C) ist zu hoch, um Taupunkt von ${powers.t_kuehl_ziel.toFixed(1)}°C zu erreichen.`;
     }
-    if (isHeating && (inputs.tHeizV - inputs.tZuluft < 10) && (states[0].T < 0)) {
+    if (isHeating && (inputs.tHeizV - states[states.length - 1].T < 10) && (states[0].T < 0)) {
         warningText += `<br><strong>Hinweis:</strong> Heizwasser-VL (${inputs.tHeizV}°C) ist für den großen Temperaturhub eventuell zu niedrig.`;
     }
 

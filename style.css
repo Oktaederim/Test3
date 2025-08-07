@@ -42,6 +42,7 @@ h1, h2, h3, h4, h5 {
 h1 { font-size: 2.2rem; text-align: center; }
 h2 { font-size: 1.6rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
 h3 { font-size: 1.4rem; margin-top: 1rem; }
+h4 { font-size: 1.1rem; }
 .card-header h2 { border-bottom: none; padding-bottom: 0; margin: 0; }
 .subtitle { text-align: center; color: var(--label-color); margin-top: -0.5rem; margin-bottom: 2rem; }
 .card {
@@ -84,7 +85,7 @@ h3 { font-size: 1.4rem; margin-top: 1rem; }
 
 .arrow { display: none; }
 @media (min-width: 992px) { .arrow { display: flex; align-items: center; font-size: 2rem; color: #ccc; } }
-.process-overview { text-align: center; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; font-size: 1.2rem; font-weight: bold; border: 1px solid; }
+.process-overview { text-align: center; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; font-size: 1.1rem; font-weight: bold; border: 1px solid; }
 .process-info { background-color: #e2f3ff; color: #004085; border-color: #b8daff; }
 .process-heating { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
 .process-success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
@@ -102,9 +103,28 @@ h3 { font-size: 1.4rem; margin-top: 1rem; }
 .footer { text-align: center; margin-top: 2rem; color: #888; font-size: 0.9rem; }
 hr { border: none; border-top: 1px solid var(--border-color); margin: 1.5rem 0; }
 
-.power-heat {
-    color: var(--danger-color);
+.power-heat { color: var(--danger-color); }
+.power-cool { color: var(--primary-color); }
+
+.info-box {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-top: 2rem;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
-.power-cool {
+.info-box summary {
+    font-weight: bold;
+    font-size: 1.2rem;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    outline: none;
     color: var(--primary-color);
+}
+.info-box .info-content {
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+.info-box .info-content p, .info-box .info-content ul {
+    margin-bottom: 1rem;
 }

@@ -41,6 +41,7 @@ function toggleUI() {
     veZielTempWrapper.querySelector('label').textContent = (heizkonzept === 'standard') ? 'VE Frostschutz-Zieltemp. (°C)' : 'VE Ziel-Temperatur (°C)';
 }
 
+// --- Psychrometrische Hilfsfunktionen ---
 const getSVP = (T) => 6.112 * Math.exp((17.62 * T) / (243.12 + T));
 const getAbsFeuchte = (T, rh, p) => 622 * (rh / 100 * getSVP(T)) / (p - (rh / 100 * getSVP(T)));
 const getRelFeuchte = (T, x, p) => {
@@ -70,7 +71,12 @@ const createZustand = (T, rh, x_val, p) => {
     return zustand;
 };
 
+
+// ###############################################################
+// ################ NEU STRUKTURIERTE BERECHNUNGSLOGIK #############
+// ###############################################################
 function calculate() {
+    // 1. Inputs einlesen
     const inputs = {
         betriebsmodus: document.querySelector('input[name="betriebsmodus"]:checked').value,
         heizkonzept: document.querySelector('input[name="heizkonzept"]:checked').value,
@@ -88,71 +94,84 @@ function calculate() {
     };
     
     const massenstrom = (inputs.volumenstrom * 1.2) / 3600;
-    let p_ve = 0, p_k = 0, p_ne = 0, kondensat = 0;
+    let p_ve = 0, p_k = 0, p_ne = 0, kondensat = 0, t_kuehl_ziel = 0;
 
+    // 2. Grundzustände und Entscheidungskriterien berechnen
     const zustand0 = createZustand(inputs.tAussen, inputs.rhAussen, null, inputs.druck);
-    let zustand1, zustand2, zustand3;
-    
-    if (inputs.heizkonzept === 've_hauptleistung') {
-        zustand1 = { ...zustand0 };
-        if (inputs.tZuluft > zustand0.T + 0.01) {
-            zustand1 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
+    const rh_nach_nur_heizen = getRelFeuchte(inputs.tZuluft, zustand0.x, inputs.druck);
+
+    // 3. Prozesspfad basierend auf intelligenter Logik bestimmen
+    const mussEntfeuchtetWerden = (inputs.betriebsmodus === 'entfeuchten') && (rh_nach_nur_heizen > inputs.rhZuluft + 0.5);
+    const mussSensibelGekuehltWerden = (inputs.betriebsmodus === 'kuehlen_sensibel') && (zustand0.T > inputs.tZuluft + 0.01);
+    const mussGeheiztWerden = zustand0.T < inputs.tZuluft - 0.01;
+
+    // Zustände initialisieren
+    let zustand1 = { ...zustand0 };
+    let zustand2 = { ...zustand1 };
+    let zustand3 = { ...zustand2 };
+
+    if (mussEntfeuchtetWerden) {
+        // --- PFAD A: ENTFEUCHTUNG (Kühlen + Nacherwärmen) ---
+        // VE nur für Frostschutz
+        if (zustand0.T < inputs.tVEZiel - 0.01) {
+            zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
             p_ve = massenstrom * (zustand1.h - zustand0.h);
         }
         zustand2 = { ...zustand1 };
-        if (inputs.betriebsmodus === 'entfeuchten') {
-            const x_soll_zuluft = getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck);
-            if (zustand1.x > x_soll_zuluft + 0.1) {
-                const t_kuehl_ziel = getTaupunkt(inputs.tZuluft, inputs.rhZuluft);
-                zustand2 = createZustand(t_kuehl_ziel, 100, x_soll_zuluft, inputs.druck);
-                p_k = massenstrom * (zustand2.h - zustand1.h);
-                kondensat = massenstrom * (zustand1.x - zustand2.x) * 3.6;
-            }
-        }
+        // Kühler
+        t_kuehl_ziel = getTaupunkt(inputs.tZuluft, inputs.rhZuluft);
+        const x_soll_zuluft = getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck);
+        zustand2 = createZustand(t_kuehl_ziel, 100, x_soll_zuluft, inputs.druck);
+        p_k = massenstrom * (zustand2.h - zustand1.h);
+        kondensat = massenstrom * (Math.max(0, zustand1.x - zustand2.x)) * 3.6;
+        // Nacherhitzer
         zustand3 = { ...zustand2 };
-        if (inputs.tZuluft > zustand2.T + 0.01) {
-            zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
-            p_ne = massenstrom * (zustand3.h - zustand2.h);
+        if (zustand2.T < inputs.tZuluft - 0.01) {
+             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
+             p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
-    } else { // Standard-Konzept
+
+    } else if (mussSensibelGekuehltWerden) {
+        // --- PFAD B: SENSIBLES KÜHLEN ---
+        zustand2 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
+        p_k = massenstrom * (zustand2.h - zustand0.h);
         zustand1 = { ...zustand0 };
-        if (zustand0.T < inputs.tVEZiel - 0.01) {
-             zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
-             p_ve = massenstrom * (zustand1.h - zustand0.h);
-        }
-        
-        zustand2 = { ...zustand1 };
-        if (inputs.betriebsmodus !== 'heizen' && inputs.tZuluft < zustand1.T - 0.01) {
-             const x_soll_zuluft = (inputs.betriebsmodus === 'entfeuchten') ? getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck) : zustand1.x;
-             const t_kuehl_ziel = (inputs.betriebsmodus === 'entfeuchten') ? getTaupunkt(inputs.tZuluft, inputs.rhZuluft) : inputs.tZuluft;
-             
-             if(zustand1.T > t_kuehl_ziel + 0.01) {
-                zustand2 = createZustand(t_kuehl_ziel, 100, x_soll_zuluft, inputs.druck);
-                p_k = massenstrom * (zustand2.h - zustand1.h);
-                kondensat = massenstrom * (zustand1.x - zustand2.x) * 3.6;
-             }
-        }
-        
         zustand3 = { ...zustand2 };
-        if (inputs.tZuluft > zustand2.T + 0.01) {
+
+    } else if (mussGeheiztWerden) {
+        // --- PFAD C: HEIZEN ---
+        if (inputs.heizkonzept === 'standard') {
+            // VE für Frostschutz, NE ist Haupterhitzer
+            if (zustand0.T < inputs.tVEZiel - 0.01) {
+                zustand1 = createZustand(inputs.tVEZiel, null, zustand0.x, inputs.druck);
+                p_ve = massenstrom * (zustand1.h - zustand0.h);
+            }
+            zustand2 = { ...zustand1 };
             zustand3 = createZustand(inputs.tZuluft, null, zustand2.x, inputs.druck);
             p_ne = massenstrom * (zustand3.h - zustand2.h);
+        } else { // ve_hauptleistung
+            // VE ist Haupterhitzer
+            zustand1 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
+            p_ve = massenstrom * (zustand1.h - zustand0.h);
+            zustand2 = { ...zustand1 };
+            zustand3 = { ...zustand1 };
         }
     }
-
+    
+    // 4. Wasserströme berechnen und UI aktualisieren
     const allStates = [zustand0, zustand1, zustand2, zustand3];
+    const finalPowers = { p_ve, p_k, p_ne, kondensat, t_kuehl_ziel };
 
     const cp_wasser = 4.187, rho_wasser = 1000;
-    const wv_ve = (p_ve > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ve * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
-    const wv_ne = (p_ne > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ne * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
-    const wv_k = (p_k < 0 && inputs.tKuehlR > inputs.tKuehlV) ? (Math.abs(p_k) * 3600) / (cp_wasser * (inputs.tKuehlR - inputs.tKuehlV) * rho_wasser) : 0;
+    finalPowers.wv_ve = (p_ve > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ve * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
+    finalPowers.wv_ne = (p_ne > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ne * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
+    finalPowers.wv_k = (p_k < 0 && inputs.tKuehlR > inputs.tKuehlV) ? (Math.abs(p_k) * 3600) / (cp_wasser * (inputs.tKuehlR - inputs.tKuehlV) * rho_wasser) : 0;
 
-    updateUI(allStates, { p_ve, p_k, p_ne, kondensat, wv_ve, wv_k, wv_ne });
+    updateUI(allStates, finalPowers, inputs);
 }
 
-function updateUI(states, powers) {
+function updateUI(states, powers, inputs) {
     const f = (val, dec) => val.toFixed(dec);
-
     states.forEach((state, i) => {
         if(document.getElementById(`res-t-${i}`)){
             document.getElementById(`res-t-${i}`).textContent = f(state.T, 1);
@@ -178,21 +197,19 @@ function updateUI(states, powers) {
     document.getElementById('summary-power-heat').textContent = `${f(totalHeat, 2)} kW`;
     document.getElementById('summary-power-cool').textContent = `${f(totalCool, 2)} kW`;
     
-    // KORREKTUR: Die Schlüssel für die Zustandsobjekte müssen großgeschrieben sein (T, not t)
     const paramMapping = { t: 'T', rh: 'rh', x: 'x', h: 'h', td: 'td' };
     Object.keys(paramMapping).forEach(paramKey => {
         const stateKey = paramMapping[paramKey];
         const unit = {'t':'°C', 'rh':'%', 'x':'g/kg', 'h':'kJ/kg', 'td':'°C'}[paramKey];
         const dec = (paramKey === 't' || paramKey === 'rh' || paramKey === 'td') ? 1 : 2;
-        
         document.getElementById(`summary-${paramKey}-aussen`).textContent = `${f(states[0][stateKey], dec)} ${unit}`;
         document.getElementById(`summary-${paramKey}-zuluft`).textContent = `${f(finalState[stateKey], dec)} ${unit}`;
     });
 
-    updateProcessVisuals(states, powers);
+    updateProcessVisuals(states, powers, inputs);
 }
 
-function updateProcessVisuals(states, powers) {
+function updateProcessVisuals(states, powers, inputs) {
     const isHeating = powers.p_ve > 0.01 || powers.p_ne > 0.01;
     const isCooling = powers.p_k < -0.01;
     const isDehumidifying = powers.kondensat > 0.01;
@@ -204,9 +221,17 @@ function updateProcessVisuals(states, powers) {
     if (isCooling && isDehumidifying && powers.p_ne > 0.01) processText = "Kühlen mit Entfeuchtung und Nacherwärmung.";
     if (powers.p_ve > 0.01 && isCooling) processText = "Frostschutz mit anschließendem Kühlprozess.";
     
+    let warningText = '';
+    if (isCooling && isDehumidifying && powers.t_kuehl_ziel < inputs.tKuehlV) {
+        warningText += `<br><strong>Achtung:</strong> Kühlwasser-VL (${inputs.tKuehlV}°C) ist zu hoch, um Taupunkt von ${powers.t_kuehl_ziel.toFixed(1)}°C zu erreichen.`;
+    }
+    if (isHeating && (inputs.tHeizV - inputs.tZuluft < 10) && (states[0].T < 0)) {
+        warningText += `<br><strong>Hinweis:</strong> Heizwasser-VL (${inputs.tHeizV}°C) ist für den großen Temperaturhub eventuell zu niedrig.`;
+    }
+
     const overview = document.createElement('div');
     overview.className = 'process-overview process-info';
-    overview.textContent = processText;
+    overview.innerHTML = processText + warningText;
     const container = document.getElementById('process-overview-container');
     container.innerHTML = '';
     container.appendChild(overview);
@@ -218,9 +243,7 @@ function updateProcessVisuals(states, powers) {
     const setNodeColor = (nodeId, colorClass) => {
         const node = document.getElementById(nodeId);
         node.classList.remove('color-red', 'color-blue', 'color-green');
-        if (colorClass) {
-            node.classList.add(colorClass);
-        }
+        if (colorClass) node.classList.add(colorClass);
     };
     
     const getColorFromTempChange = (temp, baseTemp) => {

@@ -64,6 +64,13 @@ h4 { font-size: 1.1rem; }
     width: 100%; padding: 0.75rem; border: 1px solid var(--border-color);
     border-radius: 6px; font-size: 1rem; box-sizing: border-box;
 }
+/* NEU: Stil für schreibgeschützte Felder, die als Ergebnis dienen */
+.input-group input[readonly] {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+    font-weight: bold;
+    color: #495057;
+}
 .input-group-inline > div { display: flex; gap: 0.5rem; }
 .main-config-section { padding: 1rem; background-color: #fafafa; border-radius: 8px;}
 .main-config-section h4 { margin-bottom: 0.8rem; }

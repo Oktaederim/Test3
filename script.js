@@ -39,18 +39,34 @@ function resetAll() {
     calculate();
 }
 
+// KORREKTUR: Funktion überarbeitet, um die Zuluft-Feuchte-Eingabe dynamisch zu steuern
 function toggleUI() {
+    const betriebsmodus = document.querySelector('input[name="betriebsmodus"]:checked').value;
     const heizkonzept = document.querySelector('input[name="heizkonzept"]:checked').value;
     const regelungsart = document.querySelector('input[name="regelungsart"]:checked').value;
     
-    document.getElementById('kuehlwasserWrapper').style.display = (document.querySelector('input[name="betriebsmodus"]:checked').value === 'heizen') ? 'none' : 'block';
+    document.getElementById('kuehlwasserWrapper').style.display = (betriebsmodus === 'heizen') ? 'none' : 'block';
     
     const veZielTempWrapper = document.getElementById('veZielTempWrapper');
     veZielTempWrapper.style.display = (heizkonzept === 'standard') ? 'block' : 'none';
-    veZielTempWrapper.querySelector('label').textContent = (heizkonzept === 'standard') ? 'VE Frostschutz-Zieltemp. (°C)' : 'VE Ziel-Temperatur (°C)';
+    
+    const rhZuluftInput = document.getElementById('rhZuluft');
+    const rhZuluftLabel = document.querySelector('label[for="rhZuluft"]');
+    const regelungsartWrapper = document.getElementById('regelungsart-wrapper');
 
-    document.getElementById('zuluft-trh-wrapper').style.display = (regelungsart === 'trh') ? 'block' : 'none';
-    document.getElementById('zuluft-x-wrapper').style.display = (regelungsart === 'x') ? 'block' : 'none';
+    if (betriebsmodus === 'entfeuchten') {
+        regelungsartWrapper.style.display = 'block';
+        rhZuluftInput.readOnly = false;
+        rhZuluftLabel.textContent = 'Relative Feuchte (%)';
+        document.getElementById('zuluft-trh-wrapper').style.display = (regelungsart === 'trh') ? 'block' : 'none';
+        document.getElementById('zuluft-x-wrapper').style.display = (regelungsart === 'x') ? 'block' : 'none';
+    } else { // Heizen oder Kühlen (sensibel)
+        regelungsartWrapper.style.display = 'none';
+        document.getElementById('zuluft-trh-wrapper').style.display = 'block';
+        document.getElementById('zuluft-x-wrapper').style.display = 'none';
+        rhZuluftInput.readOnly = true;
+        rhZuluftLabel.textContent = 'Relative Feuchte (Ergebnis)';
+    }
 }
 
 // --- Psychrometrische Hilfsfunktionen ---
@@ -69,17 +85,13 @@ const getTaupunkt = (T, rh) => {
     const alpha = Math.log(rh / 100) + (a * T) / (b + T);
     return (b * alpha) / (a - alpha);
 };
-// NEU: Genaue Berechnung der feuchten Dichte
 const getDichte = (T, rh, p) => {
-    const p_Pa = p * 100; // hPa -> Pa
-    const T_K = T + 273.15; // °C -> K
-    const R_d = 287.058; // Gaskonstante trockene Luft
-    const R_v = 461.52;  // Gaskonstante Wasserdampf
-    const p_v = (rh / 100) * getSVP(T) * 100; // Dampfdruck in Pa
-    const p_d = p_Pa - p_v; // Partialdruck trockene Luft
-    return (p_d / (R_d * T_K)) + (p_v / (R_v * T_K)); // Dichte in kg/m³
+    const p_Pa = p * 100; const T_K = T + 273.15;
+    const R_d = 287.058; const R_v = 461.52;
+    const p_v = (rh / 100) * getSVP(T) * 100;
+    const p_d = p_Pa - p_v;
+    return (p_d / (R_d * T_K)) + (p_v / (R_v * T_K));
 };
-
 const createZustand = (T, rh, x_val, p) => {
     const zustand = { T, p };
     if (x_val !== null) {
@@ -91,7 +103,6 @@ const createZustand = (T, rh, x_val, p) => {
     }
     zustand.h = getEnthalpie(zustand.T, zustand.x);
     zustand.td = getTaupunkt(zustand.T, zustand.rh);
-    // NEU: Berechnung und Speicherung von x in g/m³
     const dichte = getDichte(zustand.T, zustand.rh, p);
     zustand.x_gm3 = zustand.x * dichte;
     return zustand;
@@ -119,24 +130,28 @@ function calculate() {
     
     const massenstrom = (inputs.volumenstrom * 1.2) / 3600;
     let p_ve = 0, p_k = 0, p_ne = 0, kondensat = 0, t_kuehl_ziel = 0;
-
+    
     const zustand0 = createZustand(inputs.tAussen, inputs.rhAussen, null, inputs.druck);
 
     let x_soll_zuluft, rh_soll_zuluft;
-    if (inputs.regelungsart === 'trh') {
-        x_soll_zuluft = getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck);
-        rh_soll_zuluft = inputs.rhZuluft;
+    if (inputs.betriebsmodus === 'entfeuchten') {
+        if (inputs.regelungsart === 'trh') {
+            x_soll_zuluft = getAbsFeuchte(inputs.tZuluft, inputs.rhZuluft, inputs.druck);
+            rh_soll_zuluft = inputs.rhZuluft;
+        } else {
+            x_soll_zuluft = inputs.xZuluft;
+            rh_soll_zuluft = getRelFeuchte(inputs.tZuluft, x_soll_zuluft, inputs.druck);
+            document.getElementById('rh-ergebnis').textContent = rh_soll_zuluft.toFixed(1);
+        }
     } else {
-        x_soll_zuluft = inputs.xZuluft;
+        x_soll_zuluft = zustand0.x; // Bei Heizen/sens. Kühlen bleibt x konstant
         rh_soll_zuluft = getRelFeuchte(inputs.tZuluft, x_soll_zuluft, inputs.druck);
-        // NEU: Dynamische Anzeige der r.F. aktualisieren
-        document.getElementById('rh-ergebnis').textContent = rh_soll_zuluft.toFixed(1);
     }
     
     const rh_nach_nur_heizen = getRelFeuchte(inputs.tZuluft, zustand0.x, inputs.druck);
     const mussEntfeuchtetWerden = (inputs.betriebsmodus === 'entfeuchten') && (rh_nach_nur_heizen > rh_soll_zuluft + 0.5);
-    const mussSensibelGekuehltWerden = (inputs.betriebsmodus === 'kuehlen_sensibel') && (zustand0.T > inputs.tZuluft + 0.01);
-    const mussGeheiztWerden = zustand0.T < inputs.tZuluft - 0.01;
+    const mussSensibelGekuehltWerden = (inputs.betriebsmodus === 'kuehlen_sensibel'); // Logik in den Pfad verlagert
+    const mussGeheiztWerden = (inputs.betriebsmodus === 'heizen');
 
     let zustand1 = { ...zustand0 }, zustand2 = { ...zustand0 }, zustand3 = { ...zustand0 };
 
@@ -156,9 +171,17 @@ function calculate() {
              p_ne = massenstrom * (zustand3.h - zustand2.h);
         }
     } else if (mussSensibelGekuehltWerden) {
-        zustand2 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
-        p_k = massenstrom * (zustand2.h - zustand0.h);
         zustand1 = { ...zustand0 };
+        // KORREKTUR: Intelligente Prüfung auf Taupunktunterschreitung
+        if (inputs.tZuluft < zustand0.td - 0.1) { // Taupunkt wird unterschritten -> Entfeuchtung
+            t_kuehl_ziel = inputs.tZuluft;
+            const x_nach_kondensation = getAbsFeuchte(t_kuehl_ziel, 100, inputs.druck);
+            zustand2 = createZustand(t_kuehl_ziel, 100, x_nach_kondensation, inputs.druck);
+            kondensat = massenstrom * (Math.max(0, zustand0.x - x_nach_kondensation)) * 3.6;
+        } else { // Rein sensible Kühlung
+            zustand2 = createZustand(inputs.tZuluft, null, zustand0.x, inputs.druck);
+        }
+        p_k = massenstrom * (zustand2.h - zustand0.h);
         zustand3 = { ...zustand2 };
     } else if (mussGeheiztWerden) {
         if (inputs.heizkonzept === 'standard') {
@@ -181,7 +204,13 @@ function calculate() {
     
     const allStates = [zustand0, zustand1, zustand2, zustand3];
     const finalPowers = { p_ve, p_k, p_ne, kondensat, t_kuehl_ziel };
+    const finalStateForUI = allStates[allStates.length - 1];
 
+    // KORREKTUR: Ergebnisfeld für r.F. auch hier aktualisieren
+    if (inputs.betriebsmodus !== 'entfeuchten') {
+        document.getElementById('rhZuluft').value = finalStateForUI.rh.toFixed(1);
+    }
+    
     const cp_wasser = 4.187, rho_wasser = 1000;
     finalPowers.wv_ve = (p_ve > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ve * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
     finalPowers.wv_ne = (p_ne > 0 && inputs.tHeizV > inputs.tHeizR) ? (p_ne * 3600) / (cp_wasser * (inputs.tHeizV - inputs.tHeizR) * rho_wasser) : 0;
@@ -217,7 +246,6 @@ function updateUI(states, powers, inputs) {
     document.getElementById('summary-power-heat').textContent = `${f(totalHeat, 2)} kW`;
     document.getElementById('summary-power-cool').textContent = `${f(totalCool, 2)} kW`;
     
-    // NEU: paramMapping erweitert und Schleife angepasst
     const paramMapping = { t: 'T', rh: 'rh', x: 'x', x_gm3: 'x_gm3', h: 'h', td: 'td' };
     Object.keys(paramMapping).forEach(paramKey => {
         const stateKey = paramMapping[paramKey];
@@ -239,7 +267,9 @@ function updateProcessVisuals(states, powers, inputs) {
     let processText = "Keine Luftbehandlung notwendig.";
     if (isHeating && !isCooling) processText = "Reiner Heizprozess.";
     if (!isHeating && isCooling && !isDehumidifying) processText = "Sensibler Kühlprozess.";
-    if (isCooling && isDehumidifying && powers.p_ne <= 0.01) processText = "Reiner Entfeuchtungsprozess.";
+    // KORREKTUR: Text angepasst für den Fall, dass sens. Kühlen zu Entfeuchtung wird
+    if (!isHeating && isCooling && isDehumidifying) processText = "Kühlen mit Taupunktunterschreitung.";
+    if (isCooling && isDehumidifying && powers.p_ne <= 0.01 && inputs.betriebsmodus === 'entfeuchten') processText = "Reiner Entfeuchtungsprozess.";
     if (isCooling && isDehumidifying && powers.p_ne > 0.01) processText = "Kühlen mit Entfeuchtung und Nacherwärmung.";
     if (powers.p_ve > 0.01 && isCooling) processText = "Frostschutz mit anschließendem Kühlprozess.";
     
